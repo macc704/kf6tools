@@ -11,7 +11,10 @@ mongoose.connect(url, {
 var Schema = mongoose.Schema;
 
 var CommunitySchema = new Schema({
-    title: String
+    title: String,
+    scaffolds: [Schema.ObjectId],
+    views: [Schema.ObjectId],
+    authors: [Schema.ObjectId],
 }, {
     strict: false
 });
@@ -54,9 +57,14 @@ fs.readFile(jsonfile, 'utf8', function(err, text) {
 });
 
 function pCommunity(data, idtable) {
-    var orgCommunity = data.community;
-    delete orgCommunity._id;
+    var orgCommunity = {}
+    orgCommunity.title = data.community.title;
+    orgCommunity.registrationKey = data.community.registrationKey;
     Community.create(orgCommunity, function(err, community) {
+        if (err) {
+            console.log(err);
+        }
+        idtable.community = community;
         idtable.communityId = community._id;
         pAuthor(data, idtable);
     });
@@ -121,6 +129,29 @@ function pContributions(data, idtable) {
         newContributions.forEach(function(each) {
             if (each.type === 'Attachment') {
                 pAttachment(idtable.communityId, each);
+            }
+        });
+
+        var dataCommunity = data.community;
+        var dbCommunity = idtable.community;
+        var newScaffolds = [];
+        dataCommunity.scaffolds.forEach(function(each) {
+            newScaffolds.push(idtable[each]);
+        });
+        dbCommunity.scaffolds = newScaffolds;
+        var newViews = [];        
+        dataCommunity.views.forEach(function(each) {
+            newViews.push(idtable[each]);
+        });
+        dbCommunity.views = newViews;
+        var newAuthors = [];        
+        dataCommunity.authors.forEach(function(each) {
+            newAuthors.push(idtable[each]);
+        });
+        dbCommunity.authors = newAuthors;        
+        dbCommunity.save(function(err) {
+            if (err) {
+                console.log(err);
             }
         });
 
