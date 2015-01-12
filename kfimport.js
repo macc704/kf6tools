@@ -17,7 +17,9 @@ var CommunitySchema = new Schema({
 });
 var Community = mongoose.model('Community', CommunitySchema);
 
-var FreeSchema = new Schema({}, {
+var FreeSchema = new Schema({
+    url: String
+}, {
     strict: false
 });
 var User = mongoose.model('User', FreeSchema);
@@ -26,22 +28,41 @@ var Link = mongoose.model('Link', FreeSchema);
 var Record = mongoose.model('Record', FreeSchema);
 
 var fs = require('fs');
-fs.readFile('data.json', 'utf8', function(err, text) {
+var fsx = require('fs-extra');
+
+if (process.argv.length !== 3) {
+    console.log('argument number must be 3.');
+    finish();
+}
+
+var db = process.argv[2];
+if (!fs.existsSync(db)) {
+    console.log('folder ' + db + ' not found.');
+    finish();
+}
+var jsonfile = db + '/data.json';
+
+if (!fs.existsSync(jsonfile)) {
+    console.log('data.json not found in the folder ' + db);
+    finish();
+}
+
+fs.readFile(jsonfile, 'utf8', function(err, text) {
     var data = JSON.parse(text);
     var idtable = {};
-    x(data, idtable);
+    pCommunity(data, idtable);
 });
 
-function x(data, idtable) {
+function pCommunity(data, idtable) {
     var orgCommunity = data.community;
     delete orgCommunity._id;
     Community.create(orgCommunity, function(err, community) {
         idtable.communityId = community._id;
-        author(data, idtable);
+        pAuthor(data, idtable);
     });
 }
 
-function author(data, idtable) {
+function pAuthor(data, idtable) {
     data.authors.forEach(function(author) {
         author.oldId = author._id;
         delete author._id;
@@ -87,43 +108,42 @@ function pContributions(data, idtable) {
 
     var len = data.contributions.length;
     console.log('contribution: ' + len);
-    Contribution.collection.insert(data.contributions, {}, function(err, inserted) {
+    Contribution.collection.insert(data.contributions, {}, function(err, newContributions) {
         if (err) {
             console.log(err);
         }
-        //var ilen = inserteds.length;
-        for (var i = 0; i < len; i++) {
-            idtable[data.contributions[i].oldId] = inserted[i]._id;
-        }
+
+        //post process
+        newContributions.forEach(function(each) {
+            idtable[each.oldId] = each._id;
+        });
+
+        newContributions.forEach(function(each) {
+            if (each.type === 'Attachment') {
+                pAttachment(idtable.communityId, each);
+            }
+        });
+
         pLinks(data, idtable);
     });
-    // var numFinished = 0;
-    // var numOrdered = 0;
-    // data.contributions.forEach(function(contribution) {
-    //     Contribution.create(contribution, function(err, newContribution) {
-    //         idtable[contribution.oldId] = newContribution._id;
-    //         numFinished++;
-    //         console.log('contribution=' + numFinished + '/' + len);
-    //         if (numFinished >= len) {
-    //             z(data, idtable);
-    //         }
-    //     });
-    //     numOrdered++;
-    //     console.log('contribution order=' + numOrdered + '/' + len);
-    // });
-    // if (len <= 0) {
-    //     console.log('len == 0 in y');
-    //     finish();
-    // }
+}
 
-    // stack overflow
-    // Contribution.create(data.contributions, function(err) {
-    //     if (err) {
-    //         console.log(err);
-    //         return;
-    //     }
-    //     z(data, idtable);
-    // });
+function pAttachment(communityId, contribution) {
+    var path = db + '/attachments/' + contribution.oldId;
+    fs.exists(path, function(exists) {
+        if (exists) {
+            var newPath = 'uploads/' + communityId + '/' + contribution._id + '/1/' + contribution.originalName;
+            fsx.copySync(path, newPath);
+            Contribution.findById(contribution._id, function(err, c) {
+                c.url = '/' + newPath;
+                c.save(function(err, x) {
+                    if (err) {
+                        console.log(err);
+                    }
+                });
+            });
+        }
+    });
 }
 
 function pLinks(data, idtable) {
@@ -141,31 +161,24 @@ function pLinks(data, idtable) {
         link.to = newTo;
         link._id = null;
         links.push(link);
+
+        if (link.data) {
+            delete link.data.width;
+            delete link.data.height;
+        }
     });
 
     var len = links.length;
     console.log('links: ' + len);
-    var numOrdered = 0;
-    var numFinished = 0;
-    links.forEach(function(link) {
-        Link.create(link, function() {
-            numFinished++;
-            console.log('links' + numFinished + '/' + len);
-            if (numFinished >= len) {
-                xx(data, idtable);
-            }
-        });
-        numOrdered++;
-        console.log('links ordered' + numOrdered + '/' + len);
+    Link.collection.insert(links, {}, function(err) {
+        if (err) {
+            console.log(err);
+        }
+        pRecords(data, idtable);
     });
-    if (len <= 0) {
-        console.log('len == 0 in z');
-        console.log(idtable);
-        finish();
-    }
 }
 
-function xx(data, idtable) {
+function pRecords(data, idtable) {
     data.records.forEach(function(record) {
         delete record._id;
         record.communityId = idtable.communityId;
@@ -175,39 +188,17 @@ function xx(data, idtable) {
 
     var len = data.records.length;
     console.log('records: ' + len);
-    // var numOrdered = 0;
-    // var numFinished = 0;
-    // var handler = function(err, newRecord) {
-    //     numFinished++;
-    //     console.log('record=' + numFinished + '/' + len);
-    //     if (numFinished >= len) {
-    //         finish();
-    //     }
-    // };
-    // data.records.forEach(function(record) {
-    //     Record.create(record, handler);
-    //     numOrdered++;
-    //     console.log('record order=' + numOrdered + '/' + len);
-    // });
     Record.collection.insert(data.records, {}, function(err) {
         if (err) {
             console.log(err);
         }
-        finish();
+        finish(idtable);
     });
-    // StackoverFlow
-    // Record.create(data.records, function(err, newRecords) {
-    //     if(err){
-    //         console.log(err);
-    //     }
-    //     finish();
-    // });
-    if (len <= 0) {
-        console.log('len == 0 in xx');
-        finish();
-    }
 }
 
-function finish() {
+function finish(idtable) {
+    if (idtable) {
+        console.log("finished " + idtable.communityId);
+    }
     process.exit();
 }
