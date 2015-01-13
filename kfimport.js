@@ -29,6 +29,7 @@ var User = mongoose.model('User', FreeSchema);
 var Contribution = mongoose.model('Contribution', FreeSchema);
 var Link = mongoose.model('Link', FreeSchema);
 var Record = mongoose.model('Record', FreeSchema);
+var Registration = mongoose.model('Registration', FreeSchema);
 
 var fs = require('fs');
 var fsx = require('fs-extra');
@@ -83,21 +84,31 @@ function pAuthor(data, idtable) {
             if (dbAuthor) {
                 idtable[author.oldId] = dbAuthor._id
                 numFinished++;
-                console.log('author=' + numFinished + '/' + len);
-                if (numFinished >= len) {
-                    pContributions(data, idtable);
-                }
+                pAddRegistration(data, idtable, numFinished, len, dbAuthor);
             } else {
                 User.create(author, function(err, dbAuthor) {
                     idtable[author.oldId] = dbAuthor._id
                     numFinished++;
-                    console.log('author=' + numFinished + '/' + len);
-                    if (numFinished >= len) {
-                        pContributions(data, idtable);
-                    }
+                    pAddRegistration(data, idtable, numFinished, len, dbAuthor);
                 });
             }
         });
+    });
+}
+
+function pAddRegistration(data, idtable, numFinished, len, author) {
+    var registration = {};
+    registration.communityId = idtable.communityId;
+    registration.authorId = author._id;
+    registration.role = 'writer';
+    Registration.create(registration, function(err) {
+        if (err) {
+            console.log(err);
+        }
+        console.log('author=' + numFinished + '/' + len);
+        if (numFinished >= len) {
+            pContributions(data, idtable);
+        }
     });
 }
 
@@ -139,16 +150,16 @@ function pContributions(data, idtable) {
             newScaffolds.push(idtable[each]);
         });
         dbCommunity.scaffolds = newScaffolds;
-        var newViews = [];        
+        var newViews = [];
         dataCommunity.views.forEach(function(each) {
             newViews.push(idtable[each]);
         });
         dbCommunity.views = newViews;
-        var newAuthors = [];        
+        var newAuthors = [];
         dataCommunity.authors.forEach(function(each) {
             newAuthors.push(idtable[each]);
         });
-        dbCommunity.authors = newAuthors;        
+        dbCommunity.authors = newAuthors;
         dbCommunity.save(function(err) {
             if (err) {
                 console.log(err);
