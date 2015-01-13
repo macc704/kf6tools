@@ -12,9 +12,12 @@ var Schema = mongoose.Schema;
 
 var CommunitySchema = new Schema({
     title: String,
+    created: {
+        type: Date,
+        default: Date.now
+    },
     scaffolds: [Schema.ObjectId],
-    views: [Schema.ObjectId],
-    authors: [Schema.ObjectId],
+    views: [Schema.ObjectId]
 }, {
     strict: false
 });
@@ -155,11 +158,6 @@ function pContributions(data, idtable) {
             newViews.push(idtable[each]);
         });
         dbCommunity.views = newViews;
-        var newAuthors = [];
-        dataCommunity.authors.forEach(function(each) {
-            newAuthors.push(idtable[each]);
-        });
-        dbCommunity.authors = newAuthors;
         dbCommunity.save(function(err) {
             if (err) {
                 console.log(err);
