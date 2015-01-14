@@ -60,6 +60,9 @@ fs.readFile(jsonfile, 'utf8', function(err, text) {
     pCommunity(data, idtable);
 });
 
+var len = 0;
+var numFinished = 0;
+
 function pCommunity(data, idtable) {
     var orgCommunity = {}
     orgCommunity.title = data.community.title;
@@ -79,27 +82,25 @@ function pAuthor(data, idtable) {
         author.oldId = author._id;
         delete author._id;
     });
-    var len = data.authors.length;
-    var numFinished = 0;
+    len = data.authors.length;
+    numFinished = 0;
     console.log('author: ' + len);
     data.authors.forEach(function(author) {
         User.findById(author.oldId, function(err, dbAuthor) {
             if (dbAuthor) {
                 idtable[author.oldId] = dbAuthor._id
-                numFinished++;
-                pAddRegistration(data, idtable, numFinished, len, dbAuthor);
+                pAddRegistration(data, idtable, dbAuthor);
             } else {
                 User.create(author, function(err, dbAuthor) {
                     idtable[author.oldId] = dbAuthor._id
-                    numFinished++;
-                    pAddRegistration(data, idtable, numFinished, len, dbAuthor);
+                    pAddRegistration(data, idtable, dbAuthor);
                 });
             }
         });
     });
 }
 
-function pAddRegistration(data, idtable, numFinished, len, author) {
+function pAddRegistration(data, idtable, author) {
     var registration = {};
     registration.communityId = idtable.communityId;
     registration.authorId = author._id;
@@ -108,6 +109,7 @@ function pAddRegistration(data, idtable, numFinished, len, author) {
         if (err) {
             console.log(err);
         }
+        numFinished++;
         console.log('author=' + numFinished + '/' + len);
         if (numFinished >= len) {
             pContributions(data, idtable);
@@ -170,20 +172,23 @@ function pContributions(data, idtable) {
 
 function pAttachment(communityId, contribution) {
     var path = db + '/attachments/' + contribution.oldId;
-    fs.exists(path, function(exists) {
-        if (exists) {
-            var newPath = 'uploads/' + communityId + '/' + contribution._id + '/1/' + contribution.originalName;
+    var exists = fs.existsSync(path)
+    if (exists) {
+        var newPath = 'uploads/' + communityId + '/' + contribution._id + '/1/' + contribution.originalName;
+        try {
             fsx.copySync(path, newPath);
-            Contribution.findById(contribution._id, function(err, c) {
-                c.url = '/' + newPath;
-                c.save(function(err, x) {
-                    if (err) {
-                        console.log(err);
-                    }
-                });
-            });
+        } catch (error) {
+            console.log(error);
         }
-    });
+        Contribution.findById(contribution._id, function(err, c) {
+            c.url = '/' + newPath;
+            c.save(function(err, x) {
+                if (err) {
+                    console.log(err);
+                }
+            });
+        });
+    }
 }
 
 function pLinks(data, idtable) {
