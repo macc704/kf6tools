@@ -24,7 +24,9 @@ var CommunitySchema = new Schema({
 var Community = mongoose.model('Community', CommunitySchema);
 
 var FreeSchema = new Schema({
-    url: String
+    url: String,
+    body: String,
+    text4search: String
 }, {
     strict: false
 });
@@ -142,9 +144,13 @@ function pContributions(data, idtable) {
             idtable[each.oldId] = each._id;
         });
 
+        idtable.newNotes = [];
         newContributions.forEach(function(each) {
             if (each.type === 'Attachment') {
                 pAttachment(idtable.communityId, each);
+            }
+            if (each.type === 'Note') {
+                idtable.newNotes.push(each);
             }
         });
 
@@ -200,8 +206,11 @@ function pLinks(data, idtable) {
             //console.log('not found!');
             return;
         }
-        //console.log('found!');        
+        //console.log('found!');                
+        link.oldId = link._id;
+        delete link._id;
         link.communityId = idtable.communityId;
+
         link.from = newFrom;
         link.to = newTo;
         link._id = null;
@@ -215,11 +224,46 @@ function pLinks(data, idtable) {
 
     var len = links.length;
     console.log('links: ' + len);
-    Link.collection.insert(links, {}, function(err) {
+    Link.collection.insert(links, {}, function(err, newLinks) {
         if (err) {
             console.log(err);
         }
-        pRecords(data, idtable);
+
+        //post process
+        newLinks.forEach(function(each) {
+            idtable[each.oldId] = each._id;
+        });
+
+        pNotePostProcess(data, idtable);
+    });
+}
+
+function pNotePostProcess(data, idtable) {
+    var notes = idtable.newNotes;
+    var len = notes.length;
+    var numFinished = 0;
+    notes.forEach(function(note) {
+        Contribution.findById(note._id, function(err, dbNote) {
+            var text = dbNote.body;
+            var matched = text.match(/id="([0-9]+)"/g);
+            if (matched) {
+                matched.forEach(function(part) {
+                    var id = part.match(/([0-9]+)/)[0];
+                    var newId = idtable[id];
+                    var newIdStr = 'id="' + newId + '"';                  
+                    text = text.replace(part, newIdStr);
+                });
+            }
+            dbNote.body = text;
+            dbNote.text4search = dbNote.body;
+            dbNote.save(function(err) {
+                numFinished++;
+                console.log('notepost ' + numFinished + '/' + len);
+                if (numFinished >= len) {
+                    pRecords(data, idtable);
+                }
+            });
+        });
     });
 }
 
