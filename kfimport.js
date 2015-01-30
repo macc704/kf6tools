@@ -1,5 +1,27 @@
+var fs = require('fs');
+var fsx = require('fs-extra');
+
+if (process.argv.length !== 4) {
+    console.log('argument number must be 4.');
+    console.log('Usage: node import.js [dbname](kf6-dev/kf6) [foldername]');
+    finish();
+}
+
+var dbName = process.argv[2];
+var folderName = process.argv[3];
+if (!fs.existsSync(folderName)) {
+    console.log('folder ' + folderName + ' not found.');
+    finish();
+}
+var jsonfile = folderName + '/data.json';
+
+if (!fs.existsSync(jsonfile)) {
+    console.log('data.json not found in the folder ' + folderName);
+    finish();
+}
+
 var mongoose = require('mongoose');
-var url = 'mongodb://localhost/kf6-dev';
+var url = 'mongodb://localhost/'+ dbName;
 mongoose.connect(url, {
     options: {
         db: {
@@ -35,26 +57,6 @@ var Contribution = mongoose.model('Contribution', FreeSchema);
 var Link = mongoose.model('Link', FreeSchema);
 var Record = mongoose.model('Record', FreeSchema);
 var Registration = mongoose.model('Registration', FreeSchema);
-
-var fs = require('fs');
-var fsx = require('fs-extra');
-
-if (process.argv.length !== 3) {
-    console.log('argument number must be 3.');
-    finish();
-}
-
-var db = process.argv[2];
-if (!fs.existsSync(db)) {
-    console.log('folder ' + db + ' not found.');
-    finish();
-}
-var jsonfile = db + '/data.json';
-
-if (!fs.existsSync(jsonfile)) {
-    console.log('data.json not found in the folder ' + db);
-    finish();
-}
 
 fs.readFile(jsonfile, 'utf8', function(err, text) {
     var data = JSON.parse(text);
@@ -177,7 +179,7 @@ function pContributions(data, idtable) {
 }
 
 function pAttachment(communityId, contribution) {
-    var path = db + '/attachments/' + contribution.oldId;
+    var path = folderName + '/attachments/' + contribution.oldId;
     var exists = fs.existsSync(path)
     if (exists) {
         var newPath = 'uploads/' + communityId + '/' + contribution._id + '/1/' + contribution.originalName;
