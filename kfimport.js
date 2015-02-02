@@ -21,7 +21,7 @@ if (!fs.existsSync(jsonfile)) {
 }
 
 var mongoose = require('mongoose');
-var url = 'mongodb://localhost/'+ dbName;
+var url = 'mongodb://localhost/' + dbName;
 mongoose.connect(url, {
     options: {
         db: {
@@ -48,7 +48,8 @@ var Community = mongoose.model('Community', CommunitySchema);
 var FreeSchema = new Schema({
     url: String,
     body: String,
-    text4search: String
+    text4search: String,
+    data: Schema.Types.Mixed
 }, {
     strict: false
 });
@@ -182,14 +183,15 @@ function pAttachment(communityId, contribution) {
     var path = folderName + '/attachments/' + contribution.oldId;
     var exists = fs.existsSync(path)
     if (exists) {
-        var newPath = 'uploads/' + communityId + '/' + contribution._id + '/1/' + contribution.originalName;
+        var newPath = 'attachments/' + communityId + '/' + contribution._id + '/1/' + contribution.data.originalFilename;
         try {
             fsx.copySync(path, newPath);
         } catch (error) {
             console.log(error);
         }
         Contribution.findById(contribution._id, function(err, c) {
-            c.url = '/' + newPath;
+            c.data.url = newPath;
+            c.markModified('data');
             c.save(function(err, x) {
                 if (err) {
                     console.log(err);
@@ -246,18 +248,19 @@ function pNotePostProcess(data, idtable) {
     var numFinished = 0;
     notes.forEach(function(note) {
         Contribution.findById(note._id, function(err, dbNote) {
-            var text = dbNote.body;
+            var text = dbNote.data.body;
             var matched = text.match(/id="([0-9]+)"/g);
             if (matched) {
                 matched.forEach(function(part) {
                     var id = part.match(/([0-9]+)/)[0];
                     var newId = idtable[id];
-                    var newIdStr = 'id="' + newId + '"';                  
+                    var newIdStr = 'id="' + newId + '"';
                     text = text.replace(part, newIdStr);
                 });
             }
-            dbNote.body = text;
-            dbNote.text4search = dbNote.body;
+            dbNote.data.body = text;
+            dbNote.text4search = dbNote.data.body;
+            dbNote.markModified('data');
             dbNote.save(function(err) {
                 numFinished++;
                 console.log('notepost ' + numFinished + '/' + len);
